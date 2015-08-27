@@ -1,12 +1,13 @@
+"""
+This program convert function call graph (produced by IDA Pro) to graphviz format.
+"""
+
 import sys
 import json
 from graphviz import Digraph
 import networkx as nx
 import numpy as np
 
-"""
-This program convert function call graph (produced by IDA Pro) to graphviz format.
-"""
 G = nx.DiGraph()
 num2text = {}
 start_func = ["START", "MAIN", "_START", "_MAIN"]
@@ -68,24 +69,21 @@ def convert(fp_path):
     else:
         paths_from_start = nx.shortest_path(G, source=start_num)
 
-
     return paths_from_start
 
+def draw_path(paths_seq):
+    "convert path sequences to graphviz graph file."
+    dot = Digraph("All paths from main to endpoint.")
+    time_stamp = str(time.time())
+    for i in paths_seq:
+        path = paths_seq[i]
+        for node in path:
+            dot.node(node, num2text[node])
+        edges = nodes2edges(path)
+        for edge in edges:
+            dot.edge(edge["src"], edge["dst"])
+    return dot.render('cfg/'+time_stamp+'.gv', view=True)
 
-    """
-    path = nx.shortest_path(G,source="97",target="189")
-    print ("path from <start> to <GetLastError>\n {0}".format(path))
-    print_text(path)
-
-    for node in path:
-        dot2.node(node, num2text[node], shape="box")
-    edges = nodes2edges(path)
-    for edge in edges:
-        dot2.edge(edge["src"], edge["dst"], label="13")
-
-    """
-    #dot.save(filename='cfg/'+fp_path+'.gv')
-    #dot3.render('cfg/'+fp_path+'.gv', view=True)
 def compute_paths_metrics(paths_seq):
     "compute path number, depth and diversity."
     path_num = 0
@@ -103,12 +101,14 @@ def compute_paths_metrics(paths_seq):
             print ("========")
             print_text(path)
     paths_len_array = np.array(paths_len)
+    path_sum = np.sum(paths_len_array)
     path_mean = np.mean(paths_len_array)
     path_std_var = np.std(paths_len_array)
     print ("path number: {0}".format(path_num))
+    print ("path total length: {0}".format(path_sum))
     print ("path mean depth: {0}".format(path_mean))
     print ("path diversity: {0}".format(path_std_var))
-    return (path_num, path_mean, path_std_var)
+    return (path_num, path_sum, path_mean, path_std_var)
 
 def load_cuckoo_tracefile(fp_trace):
     "extrace api calls from cuckoo report file."
@@ -117,12 +117,12 @@ def load_cuckoo_tracefile(fp_trace):
     fp.close()
     cont_dict = json.loads(cont)
     calls = cont_dict["calls"]
-    calls_filter = []
+    calls_filter = set()
     for apicall in calls:
         if apicall["category"] == "system":
             pass
         else:
-            calls_filter.append(apicall["api"])
+            calls_filter.add(apicall["api"])
     return calls_filter
 
 def locate_func_num(func_name):
@@ -131,29 +131,36 @@ def locate_func_num(func_name):
             return i
     return None
 
-def main(fp_fcg, fp_trace):
-    global DEBUG
-    paths_fcg = convert(fp_fcg)
-    api_calls = load_cuckoo_tracefile(fp_trace)
+def prepare_execution_paths(api_calls):
     api_match_in_num = []
     for api in api_calls:
         if api in num2text.values():
             num = locate_func_num(api)
             if num != None:
                 api_match_in_num.append(num)
-
     paths_match = {}
     for api in api_match_in_num:
         paths_match[api] = nx.shortest_path(G, source=start_num, target=api)
+    return paths_match
+
+def main(fp_fcg, fp_trace):
+    global DEBUG
+    paths_fcg = convert(fp_fcg)
+    api_calls = load_cuckoo_tracefile(fp_trace)
+    paths_exe = prepare_execution_paths(api_calls)
 
     print ("[x]path metrics for static fcg:")
     static_met = compute_paths_metrics(paths_fcg)
+    draw_path(paths_fcg)
+    sys.exit(0)
 
     print ("[x]path metrics for execution:")
     DEBUG = True
-    exe_met = compute_paths_metrics(paths_match)
-    prog = exe_met[0]*1.0/static_met[0]
-    print ("execution progress: {0}".format(prog))
+    exe_met = compute_paths_metrics(paths_exe)
+    prog_num = exe_met[0]*1.0/static_met[0]
+    prog_len = exe_met[1]*1.0/static_met[1]
+    print ("execution path number ratio: {0}".format(prog))
+    print ("execution path length ratio: {0}".format(prog))
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:

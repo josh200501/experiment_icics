@@ -1,3 +1,6 @@
+"""
+This program convert function call graph (gdl file) to its matrix format.
+"""
 fp_path = 'func_call_graph.viki'
 
 fp = open(fp_path, 'r')

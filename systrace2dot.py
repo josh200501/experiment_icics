@@ -1,3 +1,8 @@
+"""
+This program convert system call trace (produced by ether) to graph (graphviz format).
+This way is not reasonable since the trace was just a sequence and did not contain any call information.
+Should be revised latter.
+"""
 import sys
 from graphviz import Digraph
 

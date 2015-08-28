@@ -7,12 +7,16 @@ import json
 from graphviz import Digraph
 import networkx as nx
 import numpy as np
+from zerowine_pre_process import load_zerowine_tracefile
 
 G = nx.DiGraph()
 num2text = {}
 start_func = ["START", "MAIN", "_START", "_MAIN"]
 start_num = None
 DEBUG = False
+
+CUCKOO = False
+ZEROWINE = True
 
 def print_text(num_seq):
     for i in num_seq:
@@ -146,7 +150,10 @@ def prepare_execution_paths(api_calls):
 def main(fp_fcg, fp_trace):
     global DEBUG
     paths_fcg = convert(fp_fcg)
-    api_calls = load_cuckoo_tracefile(fp_trace)
+    if CUCKOO:
+        api_calls = load_cuckoo_tracefile(fp_trace)
+    elif ZEROWINE:
+        api_calls = load_zerowine_tracefile(fp_trace)
     paths_exe = prepare_execution_paths(api_calls)
 
     print ("[x]path metrics for static fcg:")

@@ -7,12 +7,16 @@ from graphviz import Digraph
 import networkx as nx
 import numpy as np
 import time
+from zerowine_pre_process import load_zerowine_tracefile
 
 G = nx.DiGraph()
 num2text = {}
 start_func = ["START", "MAIN", "_START", "_MAIN", "START_1"]
 start_num = None
 DEBUG = False
+
+CUCKOO = False
+ZEROWINE = True
 
 def print_text(num_seq):
     for i in num_seq:
@@ -101,7 +105,10 @@ def prepare_execution_paths(api_calls):
                 api_match_in_num.append(num)
     paths_match = {}
     for api in api_match_in_num:
-        paths_match[api] = nx.shortest_path(G, source=start_num, target=api)
+        try:
+            paths_match[api] = nx.shortest_path(G, source=start_num, target=api)
+        except:
+            pass
     return paths_match
 
 def compute_paths_metrics(paths_seq):
@@ -173,9 +180,12 @@ if __name__ == '__main__':
 
         paths_fcg = convert(fp_fcg)
         paths_fcg = reduce_path(paths_fcg)
-        #draw_path(paths_fcg)
+        draw_path(paths_fcg)
 
-        api_calls = load_cuckoo_tracefile(fp_trace)
+        if CUCKOO:
+            api_calls = load_cuckoo_tracefile(fp_trace)
+        elif ZEROWINE:
+            api_calls = load_zerowine_tracefile(fp_trace)
         paths_exe = prepare_execution_paths(api_calls)
 
         print ("[o] path metrics for static fcg:")

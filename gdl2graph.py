@@ -45,7 +45,7 @@ def convert(fp_path):
             title = line.split(' ')[3][1:-1]
             label = line.split(' ')[5][1:-1]
             " save relationship between number and text."
-            num2text[title] = label
+            num2text[title] = filter_api(label)
             if label.upper() in start_func:
                 start_num = title
             if label.startswith("sub") or label.startswith('_'):
@@ -96,9 +96,20 @@ def locate_func_num(func_name):
             return i
     return None
 
+def filter_api(func_name):
+    """
+    delete postfix of windows api (Ex, W, A, etc)
+    """
+    if func_name.endswith("W") or func_name.endswith("A"):
+        func_name = func_name[:-1]
+    if func_name.endswith("Ex"):
+        func_name = func_name[:-2]
+    return func_name
+
 def prepare_execution_paths(api_calls):
     api_match_in_num = []
     for api in api_calls:
+        api = filter_api(api)
         if api in num2text.values():
             num = locate_func_num(api)
             if num != None:
@@ -151,13 +162,30 @@ def draw_path(paths_seq):
 def check_path_api(path):
     """
     check if there was api functions in one path
-    (filter out functions start with sub_xxxxxx)
+    (filter out functions start with sub_xxxxxx, nullsub_, _, lower case letter)
     """
     for node in path:
-        if not num2text[node].startswith("sub_") and not num2text[node].startswith("nullsub_"):
+        if not num2text[node].startswith("sub_") and \
+                not num2text[node].startswith("nullsub_") and \
+                not num2text[node].startswith("_") and \
+                not num2text[node][0].islower():
             if num2text[node].upper() not in start_func:
                 return True
     return False
+
+def check_node_api(node):
+    """
+    check if a node was api function.
+    """
+    name = num2text[node]
+    if name.startswith("sub_") or \
+            name.startswith("nullsub_") or \
+            name.startswith("_") or \
+            name[0].islower() or \
+            "?" in name or\
+            "@" in name:
+        return False
+    return True
 
 def reduce_path(paths_seq):
     "drop functions that was not API func."
@@ -166,6 +194,11 @@ def reduce_path(paths_seq):
     for i in paths_seq:
         path = paths_seq[i]
         if check_path_api(path):
+            while len(path):
+                if not check_node_api(path[-1]):
+                    del path[-1]
+                else:
+                    break
             res[str(j)] = path
             j += 1
     return res

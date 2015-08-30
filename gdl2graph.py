@@ -15,8 +15,18 @@ start_func = ["START", "MAIN", "_START", "_MAIN", "START_1"]
 start_num = None
 DEBUG = False
 
-CUCKOO = False
-ZEROWINE = True
+CUCKOO = True
+ZEROWINE = False
+CUCKOOAPIS = "cuckooapis.txt"
+CUCKOO_ORG = False
+
+def load_cuckooapis():
+    fp = open(CUCKOOAPIS, 'r')
+    cont = fp.read()
+    fp.close()
+    cont_dict = json.loads(cont)
+    apis = cont_dict["apis"]
+    return apis
 
 def print_text(num_seq):
     for i in num_seq:
@@ -48,10 +58,7 @@ def convert(fp_path):
             num2text[title] = filter_api(label)
             if label.upper() in start_func:
                 start_num = title
-            if label.startswith("sub") or label.startswith('_'):
-                pass
-            else:
-                G.add_node(title)
+            G.add_node(title)
 
     fp.seek(0)
     while True:
@@ -61,10 +68,7 @@ def convert(fp_path):
         elif line.startswith('edge'):
             src = line.split(' ')[3][1:-1]
             dst = line.split(' ')[5][1:-1]
-            if src.startswith("sub") and dst.startswith("sub"):
-                pass
-            else:
-                G.add_edge(src, dst)
+            G.add_edge(src, dst)
     fp.close()
 
     if start_num == None:
@@ -88,7 +92,18 @@ def load_cuckoo_tracefile(fp_trace):
             pass
         else:
             calls_filter.add(apicall["api"])
+    #print ("apis number: {0}".format(len(calls_filter)))
+    #print ("apis: {0}".format(calls_filter))
     return calls_filter
+
+def load_cuckoo_apicalls(fp_apicalls):
+    "load processed api calls"
+    fp = open(fp_apicalls, 'r')
+    cont = fp.read()
+    fp.close()
+    cont_dict = json.loads(cont)
+    calls = cont_dict["api_calls"]
+    return calls
 
 def locate_func_num(func_name):
     for i in num2text:
@@ -150,14 +165,51 @@ def draw_path(paths_seq):
     "convert path sequences to graphviz graph file."
     dot = Digraph("All paths from main to endpoint.")
     time_stamp = str(time.time())
+    "filter out duplication"
+    edges_pool = []
     for i in paths_seq:
         path = paths_seq[i]
         for node in path:
             dot.node(node, num2text[node])
         edges = nodes2edges(path)
         for edge in edges:
-            dot.edge(edge["src"], edge["dst"])
-    return dot.render('cfg/'+time_stamp+'.gv', view=True)
+            edge_sign = edge["src"]+edge["dst"]
+            if edge_sign not in edges_pool:
+                dot.edge(edge["src"], edge["dst"])
+                edges_pool.append(edge_sign)
+    dot.render('cfg/'+time_stamp+'.gv', view=True)
+
+def draw_path_hybrid(fcg_path, exe_path):
+    "draw execution path on static function call graph"
+    dot = Digraph(".")
+    time_stamp = str(time.time())
+    "filter out duplication"
+    edges_pool = []
+    #nodes_pool = []
+    "draw execution path"
+    for i in exe_path:
+        path = exe_path[i]
+        for node in path:
+            dot.node(node, num2text[node], color="red")
+        edges = nodes2edges(path)
+        for edge in edges:
+            edge_sign = edge["src"]+edge["dst"]
+            if edge_sign not in edges_pool:
+                dot.edge(edge["src"], edge["dst"], color="red")
+                edges_pool.append(edge_sign)
+    "draw static function call graph"
+    for i in fcg_path:
+        path = fcg_path[i]
+        for node in path:
+            dot.node(node, num2text[node])
+        edges = nodes2edges(path)
+        for edge in edges:
+            edge_sign = edge["src"]+edge["dst"]
+            if edge_sign not in edges_pool:
+                dot.edge(edge["src"], edge["dst"])
+                edges_pool.append(edge_sign)
+    dot.render('cfg/'+time_stamp+'.gv', view=True)
+
 
 def check_path_api(path):
     """
@@ -167,8 +219,7 @@ def check_path_api(path):
     for node in path:
         if not num2text[node].startswith("sub_") and \
                 not num2text[node].startswith("nullsub_") and \
-                not num2text[node].startswith("_") and \
-                not num2text[node][0].islower():
+                not num2text[node].startswith("_"):
             if num2text[node].upper() not in start_func:
                 return True
     return False
@@ -177,15 +228,38 @@ def check_node_api(node):
     """
     check if a node was api function.
     """
+    "get apis in function call graph"
+    fcg_apis = set(num2text.values())
+    fcg_apis_plain = set()
+    for api in fcg_apis:
+        fcg_apis_plain.add(filter_api(api))
+
+    "get apis in cuckoo monitor list"
+    cuckoo_apis_plain = set(load_cuckooapis())
+
+    "get apis in execution path"
+    if CUCKOO:
+        if CUCKOO_ORG:
+            api_calls = load_cuckoo_tracefile(fp_trace)
+        else:
+            api_calls = load_cuckoo_apicalls(fp_trace)
+    elif ZEROWINE:
+        api_calls = load_zerowine_tracefile(fp_trace)
+    cuckoo_apis_exe = set()
+    for api in api_calls:
+        cuckoo_apis_exe.add(filter_api(api))
+    cuckoo_apis_plain = cuckoo_apis_plain | cuckoo_apis_exe
+
+    "get common part of apis"
+    common_apis = fcg_apis_plain & cuckoo_apis_plain
+
+    "get node function name"
     name = num2text[node]
-    if name.startswith("sub_") or \
-            name.startswith("nullsub_") or \
-            name.startswith("_") or \
-            name[0].islower() or \
-            "?" in name or\
-            "@" in name:
+    name_plain = filter_api(name)
+    if name_plain in common_apis:
+        return True
+    else:
         return False
-    return True
 
 def reduce_path(paths_seq):
     "drop functions that was not API func."
@@ -193,14 +267,17 @@ def reduce_path(paths_seq):
     j = 0
     for i in paths_seq:
         path = paths_seq[i]
+        "check apis in path"
         if check_path_api(path):
             while len(path):
+                "check whether a node was api call"
                 if not check_node_api(path[-1]):
                     del path[-1]
                 else:
                     break
-            res[str(j)] = path
-            j += 1
+            if path:
+                res[str(j)] = path
+                j += 1
     return res
 
 if __name__ == '__main__':
@@ -212,11 +289,19 @@ if __name__ == '__main__':
         fp_trace = sys.argv[2]
 
         paths_fcg = convert(fp_fcg)
+        draw_path(paths_fcg)
         paths_fcg = reduce_path(paths_fcg)
+        #print ("path num: {0}".len(paths_fcg))
+        #print ("paths: {0}".format(paths_fcg))
+        #for path in paths_fcg:
+        #    print_text(path)
         draw_path(paths_fcg)
 
         if CUCKOO:
-            api_calls = load_cuckoo_tracefile(fp_trace)
+            if CUCKOO_ORG:
+                api_calls = load_cuckoo_tracefile(fp_trace)
+            else:
+                api_calls = load_cuckoo_apicalls(fp_trace)
         elif ZEROWINE:
             api_calls = load_zerowine_tracefile(fp_trace)
         paths_exe = prepare_execution_paths(api_calls)
@@ -226,6 +311,8 @@ if __name__ == '__main__':
 
         print ("[o] path metrics for execution:")
         exe_met = compute_paths_metrics(paths_exe)
+
+        draw_path_hybrid(paths_fcg, paths_exe)
 
         print ("[o] execution progress:")
         prog_num = exe_met[0]*1.0/static_met[0]

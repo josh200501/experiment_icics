@@ -1,5 +1,6 @@
 import sys
 from graphviz import Digraph
+import os
 
 dot = Digraph(comment="test")
 fp_path1 = 'test.gdl'
@@ -47,7 +48,7 @@ def convert(fp_path):
                     break
         else:
             continue
-
+    fp_path = os.path.basename(fp_path)
     dot.render('cfg/'+fp_path+'.gv', view=False)
 
 if __name__ == '__main__':

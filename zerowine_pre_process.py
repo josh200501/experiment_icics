@@ -38,7 +38,7 @@ def load_zerowine_tracefile(fp_trace):
     fp.close()
     #print ("all lines: {0}".format(j))
     #print ("api calls: {0}".format(api_calls))
-    print ("number of calls: {0}".format(len(api_calls)))
+    #print ("number of calls: {0}".format(len(api_calls)))
     return api_calls
 
 def dummy_main(fp_trace):

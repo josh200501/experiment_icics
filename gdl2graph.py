@@ -15,8 +15,8 @@ start_func = ["START", "MAIN", "_START", "_MAIN", "START_1"]
 start_num = None
 DEBUG = False
 
-CUCKOO = True
-ZEROWINE = False
+CUCKOO = False
+ZEROWINE = True
 CUCKOOAPIS = "cuckooapis.txt"
 CUCKOO_ORG = False
 
@@ -155,10 +155,10 @@ def compute_paths_metrics(paths_seq):
     path_sum = np.sum(paths_len_array)
     path_mean = np.mean(paths_len_array)
     path_std_var = np.std(paths_len_array)
-    print ("path number: {0}".format(path_num))
-    print ("path length sum: {0}".format(path_sum))
-    print ("path mean depth: {0}".format(round(path_mean, 2)))
-    print ("path diversity: {0}".format(round(path_std_var, 2)))
+    print "path number:".rjust(30),"{0}".format(path_num).ljust(30)
+    print "path length sum:".rjust(30),"{0}".format(path_sum).ljust(30)
+    print "path mean depth:".rjust(30),"{0}".format(round(path_mean, 2)).ljust(30)
+    print "path diversity:".rjust(30),"{0}".format(round(path_std_var, 2)).ljust(30)
     return (path_num, path_sum, path_mean, path_std_var)
 
 def draw_path(paths_seq):
@@ -289,13 +289,13 @@ if __name__ == '__main__':
         fp_trace = sys.argv[2]
 
         paths_fcg = convert(fp_fcg)
-        draw_path(paths_fcg)
+        #draw_path(paths_fcg)
+
+        print ("[o] path metrics for static fcg (unfiltered)")
+        compute_paths_metrics(paths_fcg)
+
         paths_fcg = reduce_path(paths_fcg)
-        #print ("path num: {0}".len(paths_fcg))
-        #print ("paths: {0}".format(paths_fcg))
-        #for path in paths_fcg:
-        #    print_text(path)
-        draw_path(paths_fcg)
+        #draw_path(paths_fcg)
 
         if CUCKOO:
             if CUCKOO_ORG:
@@ -306,19 +306,19 @@ if __name__ == '__main__':
             api_calls = load_zerowine_tracefile(fp_trace)
         paths_exe = prepare_execution_paths(api_calls)
 
-        print ("[o] path metrics for static fcg:")
+        print ("[o] path metrics for static fcg (filtered)")
         static_met = compute_paths_metrics(paths_fcg)
 
         print ("[o] path metrics for execution:")
         exe_met = compute_paths_metrics(paths_exe)
 
-        draw_path_hybrid(paths_fcg, paths_exe)
+        #draw_path_hybrid(paths_fcg, paths_exe)
 
         print ("[o] execution progress:")
         prog_num = exe_met[0]*1.0/static_met[0]
         prog_len = exe_met[1]*1.0/static_met[1]
         #print ("exe_met: {0}".format(exe_met))
         #print ("static_met: {0}".format(static_met))
-        print ("execution path number ratio: {0}".format(round(prog_num, 2)))
-        print ("execution path length ratio: {0}".format(round(prog_len, 2)))
+        print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num, 2)).ljust(30)
+        print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len, 2)).ljust(30)
 

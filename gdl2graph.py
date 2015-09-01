@@ -13,25 +13,31 @@ G = nx.DiGraph()
 num2text = {}
 start_func = ["START", "MAIN", "_START", "_MAIN", "START_1"]
 start_num = None
-DEBUG = False
 
-CUCKOO = False
-ZEROWINE = True
+DEBUG = True
+CUCKOO = True
+ZEROWINE = False
 CUCKOOAPIS = "cuckooapis.txt"
 CUCKOO_ORG = False
 
-def load_cuckooapis():
+STATIC_APIS = set()
+EXECUT_APIS = set()
+MONITOR_APIS = set()
+COMMON_APIS = set()
+
+def init_monitor_apis():
+    global MONITOR_APIS
     fp = open(CUCKOOAPIS, 'r')
     cont = fp.read()
     fp.close()
     cont_dict = json.loads(cont)
     apis = cont_dict["apis"]
+    MONITOR_APIS = set(apis)
     return apis
 
 def print_text(num_seq):
     for i in num_seq:
         print(num2text[i]+'-->')
-
 
 def nodes2edges(nodes_seq):
     last_node = None
@@ -92,8 +98,9 @@ def load_cuckoo_tracefile(fp_trace):
             pass
         else:
             calls_filter.add(apicall["api"])
-    #print ("apis number: {0}".format(len(calls_filter)))
-    #print ("apis: {0}".format(calls_filter))
+    if DEBUG:
+        print ("exe apis number: {0}".format(len(calls_filter)))
+        print ("apis: {0}".format(calls_filter))
     return calls_filter
 
 def load_cuckoo_apicalls(fp_apicalls):
@@ -103,6 +110,9 @@ def load_cuckoo_apicalls(fp_apicalls):
     fp.close()
     cont_dict = json.loads(cont)
     calls = cont_dict["api_calls"]
+    if DEBUG:
+        print ("exe apis number: {0}".format(len(calls)))
+        print ("apis: {0}".format(calls))
     return calls
 
 def locate_func_num(func_name):
@@ -129,6 +139,8 @@ def prepare_execution_paths(api_calls):
             num = locate_func_num(api)
             if num != None:
                 api_match_in_num.append(num)
+    if DEBUG:
+        print ("exe path match num: {0}".format(len(api_match_in_num)))
     paths_match = {}
     for api in api_match_in_num:
         try:
@@ -144,13 +156,15 @@ def compute_paths_metrics(paths_seq):
     path_mean = 0
     path_std_var = 0
     if DEBUG:
-        print ("=====paths=====")
+        #print ("=====paths=====")
+        pass
     for i in paths_seq:
         path = paths_seq[i]
         path_num += 1
         paths_len.append(len(path))
         if DEBUG:
-            print ("to {0}: {1}".format(i, path))
+            #print ("to {0}: {1}".format(i, path))
+            pass
     paths_len_array = np.array(paths_len)
     path_sum = np.sum(paths_len_array)
     path_mean = np.mean(paths_len_array)
@@ -224,20 +238,17 @@ def check_path_api(path):
                 return True
     return False
 
-def check_node_api(node):
-    """
-    check if a node was api function.
-    """
-    "get apis in function call graph"
+def init_static_apis():
+    global STATIC_APIS
     fcg_apis = set(num2text.values())
     fcg_apis_plain = set()
     for api in fcg_apis:
         fcg_apis_plain.add(filter_api(api))
+    STATIC_APIS = fcg_apis_plain
 
-    "get apis in cuckoo monitor list"
-    cuckoo_apis_plain = set(load_cuckooapis())
-
+def init_execut_apis(fp_trace):
     "get apis in execution path"
+    global EXECUT_APIS
     if CUCKOO:
         if CUCKOO_ORG:
             api_calls = load_cuckoo_tracefile(fp_trace)
@@ -245,18 +256,19 @@ def check_node_api(node):
             api_calls = load_cuckoo_apicalls(fp_trace)
     elif ZEROWINE:
         api_calls = load_zerowine_tracefile(fp_trace)
-    cuckoo_apis_exe = set()
+    apis_exe = set()
     for api in api_calls:
-        cuckoo_apis_exe.add(filter_api(api))
-    cuckoo_apis_plain = cuckoo_apis_plain | cuckoo_apis_exe
+        apis_exe.add(filter_api(api))
+    EXECUT_APIS = apis_exe
 
-    "get common part of apis"
-    common_apis = fcg_apis_plain & cuckoo_apis_plain
-
+def check_node_api(node):
+    """
+    check if a node was api function.
+    """
     "get node function name"
     name = num2text[node]
     name_plain = filter_api(name)
-    if name_plain in common_apis:
+    if name_plain in COMMON_APIS:
         return True
     else:
         return False
@@ -280,6 +292,44 @@ def reduce_path(paths_seq):
                 j += 1
     return res
 
+def main(fp_fcg, fp_trace):
+    global COMMON_APIS
+    paths_fcg = convert(fp_fcg)
+    #draw_path(paths_fcg)
+    print ("path metrics for static fcg (unfiltered)".center(2*30,'='))
+    compute_paths_metrics(paths_fcg)
+
+    init_static_apis()
+    init_monitor_apis()
+    init_execut_apis(fp_trace)
+    COMMON_APIS = STATIC_APIS & (MONITOR_APIS | EXECUT_APIS)
+    if DEBUG:
+        print ("static apis: {0}".format(len(STATIC_APIS)))
+        print ("monitor apis: {0}".format(len(MONITOR_APIS)))
+        print ("execut apis: {0}".format(len(EXECUT_APIS)))
+        print ("common apis: {0}".format(len(COMMON_APIS)))
+
+    paths_fcg = reduce_path(paths_fcg)
+    #draw_path(paths_fcg)
+    print ("path metrics for static fcg (filtered)".center(2*30,'='))
+    static_met = compute_paths_metrics(paths_fcg)
+
+    paths_exe = prepare_execution_paths(EXECUT_APIS)
+    print ("path metrics for execution".center(2*30,'='))
+    exe_met = compute_paths_metrics(paths_exe)
+
+    #draw_path_hybrid(paths_fcg, paths_exe)
+
+    print ("execution progress".center(2*30,'='))
+    try:
+        prog_num = exe_met[0]*1.0/static_met[0]
+        prog_len = exe_met[1]*1.0/static_met[1]
+    except:
+        prog_num = 0
+        prog_len = 0
+    print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num, 2)).ljust(30)
+    print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len, 2)).ljust(30)
+
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         print("usage: program <gdlfile> <tracefile>")
@@ -287,38 +337,6 @@ if __name__ == '__main__':
     else:
         fp_fcg = sys.argv[1]
         fp_trace = sys.argv[2]
+        main(fp_fcg, fp_trace)
 
-        paths_fcg = convert(fp_fcg)
-        #draw_path(paths_fcg)
-
-        print ("[o] path metrics for static fcg (unfiltered)")
-        compute_paths_metrics(paths_fcg)
-
-        paths_fcg = reduce_path(paths_fcg)
-        #draw_path(paths_fcg)
-
-        if CUCKOO:
-            if CUCKOO_ORG:
-                api_calls = load_cuckoo_tracefile(fp_trace)
-            else:
-                api_calls = load_cuckoo_apicalls(fp_trace)
-        elif ZEROWINE:
-            api_calls = load_zerowine_tracefile(fp_trace)
-        paths_exe = prepare_execution_paths(api_calls)
-
-        print ("[o] path metrics for static fcg (filtered)")
-        static_met = compute_paths_metrics(paths_fcg)
-
-        print ("[o] path metrics for execution:")
-        exe_met = compute_paths_metrics(paths_exe)
-
-        #draw_path_hybrid(paths_fcg, paths_exe)
-
-        print ("[o] execution progress:")
-        prog_num = exe_met[0]*1.0/static_met[0]
-        prog_len = exe_met[1]*1.0/static_met[1]
-        #print ("exe_met: {0}".format(exe_met))
-        #print ("static_met: {0}".format(static_met))
-        print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num, 2)).ljust(30)
-        print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len, 2)).ljust(30)
 

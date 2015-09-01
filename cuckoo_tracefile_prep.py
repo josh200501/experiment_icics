@@ -1,21 +1,35 @@
+#coding:utf8
 import json
 import sys
 import os
 
+reload(sys)
+sys.setdefaultencoding("gbk")
+
 ORG = True
 FILTER = False
+DST = False
 
 def main(fp_path):
     fp = open(fp_path, 'r')
     cont = fp.read()
     fp.close()
     cont_dict = json.loads(cont)
-    if ORG:
-        proc = cont_dict["behavior"]["processes"][1]
+    sample_info = cont_dict["target"]
+    if sample_info["category"] == "file":
+        file_info = sample_info["file"]
+        file_name = file_info["name"]
+        file_md5 = file_info["md5"]
     else:
-        proc = cont_dict["processes"][0]
-    calls = proc["calls"]
-    name = proc["process_name"]
+        print ("sample is not a file.")
+        sys.exit(0)
+
+    processes = cont_dict["behavior"]["processes"]
+    for process in processes:
+        if process["process_name"] == file_name:
+            file_proc = process
+            break
+    calls = file_proc["calls"]
 
     calls_filter = set()
     for apicall in calls:
@@ -31,8 +45,15 @@ def main(fp_path):
     api_calls = []
     for api_call in calls_filter:
         api_calls.append(api_call)
-    res = {"name":name, "api_calls":api_calls}
-    fp = open(os.path.basename(fp_path)+".proc",'w')
+
+    res = {"name":file_name, "md5":file_md5, "api_calls":api_calls}
+    res_dir = os.path.dirname(fp_path)
+    res_name = file_name+'_'+file_md5+".json"
+    if DST:
+        res_dir_name = os.path.join(res_dir, res_name)
+    else:
+        res_dir_name = res_name
+    fp = open(res_dir_name,'w')
     res = json.dumps(res, indent=4)
     fp.write(res)
     fp.close()

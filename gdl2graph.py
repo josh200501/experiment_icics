@@ -292,10 +292,42 @@ def reduce_path(paths_seq):
                 j += 1
     return res
 
+def check_node_api_aux(node):
+    """
+    check if a node was api function.
+    """
+    "get node function name"
+    name = num2text[node]
+    if not name.startswith("sub_") and \
+            not name.startswith("nullsub_") and \
+            not name.startswith("_"):
+        return True
+    return False
+
+def reduce_path_aux(paths_seq):
+    "drop functions that was not API func."
+    res = {}
+    j = 0
+    for i in paths_seq:
+        path = paths_seq[i]
+        "check apis in path"
+        if check_path_api(path):
+            while len(path):
+                "check whether a node was api call"
+                if not check_node_api_aux(path[-1]):
+                    del path[-1]
+                else:
+                    break
+            if path:
+                res[str(j)] = path
+                j += 1
+    return res
+
 def main(fp_fcg, fp_trace):
     global COMMON_APIS
     paths_fcg = convert(fp_fcg)
-    #draw_path(paths_fcg)
+    "origin fcg (from <start>)"
+    draw_path(paths_fcg)
     print ("path metrics for static fcg (unfiltered)".center(2*30,'='))
     compute_paths_metrics(paths_fcg)
 
@@ -309,6 +341,11 @@ def main(fp_fcg, fp_trace):
         print ("execut apis: {0}".format(len(EXECUT_APIS)))
         print ("common apis: {0}".format(len(COMMON_APIS)))
 
+    "reduce internal function"
+    paths_fcg_aux = reduce_path_aux(paths_fcg)
+    draw_path(paths_fcg_aux)
+
+    "save only apis in common part apis"
     paths_fcg = reduce_path(paths_fcg)
     #draw_path(paths_fcg)
     print ("path metrics for static fcg (filtered)".center(2*30,'='))
@@ -318,7 +355,7 @@ def main(fp_fcg, fp_trace):
     print ("path metrics for execution".center(2*30,'='))
     exe_met = compute_paths_metrics(paths_exe)
 
-    #draw_path_hybrid(paths_fcg, paths_exe)
+    draw_path_hybrid(paths_fcg, paths_exe)
 
     print ("execution progress".center(2*30,'='))
     try:

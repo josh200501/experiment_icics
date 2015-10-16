@@ -12,7 +12,12 @@ from zerowine_pre_process import load_zerowine_tracefile
 G = nx.DiGraph()
 num2text = {}
 start_func = ["START", "MAIN", "_START", "_MAIN", "START_1"]
+exit_func = ["EXIT", "EXITPROCESS"]
 start_num = None
+exit_num = None
+
+TEST = True
+#TEST = False
 
 DEBUG = True
 CUCKOO = True
@@ -51,7 +56,13 @@ def nodes2edges(nodes_seq):
     return edges
 
 def convert(fp_path):
+    global start_func
+    global exit_func
     global start_num
+    global exit_num
+    paths_s2e_tmp = []
+    paths_from_start = []
+    paths_from_start_to_exit = {}
     fp = open(fp_path, 'r')
     while True:
         line = fp.readline()
@@ -64,6 +75,8 @@ def convert(fp_path):
             num2text[title] = filter_api(label)
             if label.upper() in start_func:
                 start_num = title
+            if label.upper() in exit_func:
+                exit_num = title
             G.add_node(title)
 
     fp.seek(0)
@@ -82,6 +95,13 @@ def convert(fp_path):
         sys.exit(1)
     else:
         paths_from_start = nx.shortest_path(G, source=start_num)
+        if TEST:
+            paths_s2e_tmp = nx.all_simple_paths(G, source=start_num, target=exit_num)
+            j = 0
+            for i in paths_s2e_tmp:
+                paths_from_start_to_exit[j] = i
+                j += 1
+            return paths_from_start_to_exit
 
     return paths_from_start
 
@@ -328,6 +348,9 @@ def main(fp_fcg, fp_trace):
     paths_fcg = convert(fp_fcg)
     "origin fcg (from <start>)"
     draw_path(paths_fcg)
+    if TEST:
+        print ("draw all paths from start to exit")
+        sys.exit(0)
     print ("path metrics for static fcg (unfiltered)".center(2*30,'='))
     compute_paths_metrics(paths_fcg)
 

@@ -17,9 +17,10 @@ start_num = None
 exit_num = None
 
 TEST = True
-#TEST = False
+TEST = False
 
 DEBUG = True
+DEBUG = False
 CUCKOO = True
 ZEROWINE = False
 CUCKOOAPIS = "cuckooapis.txt"
@@ -347,12 +348,12 @@ def main(fp_fcg, fp_trace):
     global COMMON_APIS
     paths_fcg = convert(fp_fcg)
     "origin fcg (from <start>)"
-    draw_path(paths_fcg)
+    #draw_path(paths_fcg)
     if TEST:
         print ("draw all paths from start to exit")
         sys.exit(0)
     print ("path metrics for static fcg (unfiltered)".center(2*30,'='))
-    compute_paths_metrics(paths_fcg)
+    #compute_paths_metrics(paths_fcg)
 
     init_static_apis()
     init_monitor_apis()
@@ -366,29 +367,38 @@ def main(fp_fcg, fp_trace):
 
     "reduce internal function"
     paths_fcg_aux = reduce_path_aux(paths_fcg)
-    draw_path(paths_fcg_aux)
+    #draw_path(paths_fcg_aux)
 
+    print ("path metrics for static fcg (soft filtered)".center(2*30,'='))
+    static_met_noise = compute_paths_metrics(paths_fcg_aux)
     "save only apis in common part apis"
     paths_fcg = reduce_path(paths_fcg)
     #draw_path(paths_fcg)
-    print ("path metrics for static fcg (filtered)".center(2*30,'='))
-    static_met = compute_paths_metrics(paths_fcg)
+    print ("path metrics for static fcg (hard filtered)".center(2*30,'='))
+    #static_met = compute_paths_metrics(paths_fcg)
 
     paths_exe = prepare_execution_paths(EXECUT_APIS)
     print ("path metrics for execution".center(2*30,'='))
     exe_met = compute_paths_metrics(paths_exe)
 
-    draw_path_hybrid(paths_fcg, paths_exe)
+    #draw_path_hybrid(paths_fcg, paths_exe)
 
-    print ("execution progress".center(2*30,'='))
+    print ("execution progress (noise)".center(2*30,'='))
     try:
-        prog_num = exe_met[0]*1.0/static_met[0]
-        prog_len = exe_met[1]*1.0/static_met[1]
+        #prog_num = exe_met[0]*1.0/static_met[0]
+        #prog_len = exe_met[1]*1.0/static_met[1]
+        prog_num_noise = exe_met[0]*1.0/static_met_noise[0]
+        prog_len_noise = exe_met[1]*1.0/static_met_noise[1]
     except:
         prog_num = 0
         prog_len = 0
-    print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num, 2)).ljust(30)
-    print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len, 2)).ljust(30)
+
+    print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num_noise, 3)).ljust(30)
+    print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len_noise, 3)).ljust(30)
+
+    #print ("execution progress (nnoise)".center(2*30,'='))
+    #print "exe ratio (path num):".rjust(30),"{0}".format(round(prog_num, 2)).ljust(30)
+    #print "exe ratio (path len):".rjust(30),"{0}".format(round(prog_len, 2)).ljust(30)
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
